@@ -142,6 +142,17 @@ impl Count for Packed<FootnoteElem> {
     }
 }
 
+/// A group of footnotes.
+///
+/// This is automatically created from adjacent footnotes during show rule
+/// application.
+#[elem(Locatable)]
+pub struct FootnoteGroup {
+    /// The citations.
+    #[required]
+    pub children: Vec<Packed<FootnoteElem>>,
+}
+
 /// The body of a footnote can be either some content or a label referencing
 /// another footnote.
 #[derive(Debug, Clone, PartialEq, Hash)]

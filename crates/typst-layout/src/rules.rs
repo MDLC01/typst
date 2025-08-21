@@ -5,8 +5,8 @@ use ecow::{EcoVec, eco_format};
 use smallvec::smallvec;
 use typst_library::diag::{At, SourceResult, bail};
 use typst_library::foundations::{
-    Content, Context, NativeElement, NativeRuleMap, Packed, Resolve, ShowFn, Smart,
-    StyleChain, Target, dict,
+    Content, Context, NativeElement, NativeRuleMap, Packed, Resolve, SequenceElem,
+    ShowFn, Smart, StyleChain, Target, dict,
 };
 use typst_library::introspection::{Counter, Locator, LocatorLink};
 use typst_library::layout::{
@@ -19,9 +19,10 @@ use typst_library::layout::{
 use typst_library::math::EquationElem;
 use typst_library::model::{
     Attribution, BibliographyElem, CiteElem, CiteGroup, CslSource, Destination, EmphElem,
-    EnumElem, FigureCaption, FigureElem, FootnoteElem, FootnoteEntry, HeadingElem,
-    LinkElem, ListElem, Outlinable, OutlineElem, OutlineEntry, ParElem, ParbreakElem,
-    QuoteElem, RefElem, StrongElem, TableCell, TableElem, TermsElem, TitleElem, Works,
+    EnumElem, FigureCaption, FigureElem, FootnoteElem, FootnoteEntry, FootnoteGroup,
+    HeadingElem, LinkElem, ListElem, Outlinable, OutlineElem, OutlineEntry, ParElem,
+    ParbreakElem, QuoteElem, RefElem, StrongElem, TableCell, TableElem, TermsElem,
+    TitleElem, Works,
 };
 use typst_library::pdf::AttachElem;
 use typst_library::text::{
@@ -52,7 +53,7 @@ pub fn register(rules: &mut NativeRuleMap) {
     rules.register(Paged, FIGURE_RULE);
     rules.register(Paged, FIGURE_CAPTION_RULE);
     rules.register(Paged, QUOTE_RULE);
-    rules.register(Paged, FOOTNOTE_RULE);
+    rules.register(Paged, FOOTNOTE_GROUP_RULE);
     rules.register(Paged, FOOTNOTE_ENTRY_RULE);
     rules.register(Paged, OUTLINE_RULE);
     rules.register(Paged, OUTLINE_ENTRY_RULE);
@@ -374,16 +375,30 @@ const QUOTE_RULE: ShowFn<QuoteElem> = |elem, _, styles| {
     Ok(realized)
 };
 
-const FOOTNOTE_RULE: ShowFn<FootnoteElem> = |elem, engine, styles| {
-    let span = elem.span();
-    let loc = elem.declaration_location(engine).at(span)?;
-    let numbering = elem.numbering.get_ref(styles);
-    let counter = Counter::of(FootnoteElem::ELEM);
-    let num = counter.display_at_loc(engine, loc, styles, numbering)?;
-    let sup = SuperElem::new(num).pack().spanned(span);
-    let loc = loc.variant(1);
-    // Add zero-width weak spacing to make the footnote "sticky".
-    Ok(HElem::hole().pack() + sup.linked(Destination::Location(loc)))
+const FOOTNOTE_GROUP_RULE: ShowFn<FootnoteGroup> = |elem, engine, styles| {
+    // TODO: Use `Iterator::intersperse` when stabilized.
+    let separator = TextElem::new(",\u{200B}".into()).pack();
+    let mut notes = Vec::new();
+    for (i, note) in elem.children.iter().enumerate() {
+        if i != 0 {
+            notes.push(separator.clone());
+        }
+        let span = note.span();
+        let loc = note.declaration_location(engine).at(span)?;
+        let numbering = note.numbering.get_ref(styles);
+        let counter = Counter::of(FootnoteElem::ELEM);
+        notes.push(
+            counter
+                .display_at_loc(engine, loc, styles, numbering)?
+                .linked(Destination::Location(loc.variant(1)))
+                .spanned(span),
+        );
+    }
+    let sup = SuperElem::new(SequenceElem::new(notes).pack())
+        .pack()
+        .spanned(elem.span());
+    // Add zero-width weak spacing to make the footnotes "sticky".
+    Ok(HElem::hole().pack() + sup)
 };
 
 const FOOTNOTE_ENTRY_RULE: ShowFn<FootnoteEntry> = |elem, engine, styles| {
