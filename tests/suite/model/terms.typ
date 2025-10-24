@@ -3,8 +3,8 @@
 --- terms-constructor render pdftags ---
 // Test with constructor.
 #terms(
-  ([One], [First]),
-  ([Two], [Second]),
+  terms.item([One], [First]),
+  terms.item[Two][Second],
 )
 
 --- terms-built-in-loop ---
